@@ -1,0 +1,13 @@
+PySide6>=6.6.0
+opencv-python>=4.9.0
+numpy>=1.26.0
+
+# QtSvg (used to render the launcher's vector icons) ships inside the main
+# PySide6 wheel. If you ever see "No module named 'PySide6.QtSvg'", run:
+#   pip install PySide6-Addons
+#
+# QtMultimedia (used by video_window.py to play the audio track alongside
+# the OpenCV-decoded video frames) also ships inside PySide6-Addons. If you
+# see "No module named 'PySide6.QtMultimedia'", run the same command above.
+# On Windows it uses the system's Media Foundation backend, so no extra
+# codecs need to be installed separately.
