@@ -1,5 +1,10 @@
 import os
+import urllib.request
 import cv2
+import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
+
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QSlider
@@ -8,9 +13,17 @@ from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 
+HAND_CONNECTIONS = [
+    (0, 1), (1, 2), (2, 3), (3, 4),                # thumb
+    (0, 5), (5, 6), (6, 7), (7, 8),                # index finger
+    (5, 9), (9, 10), (10, 11), (11, 12),           # middle finger
+    (9, 13), (13, 14), (14, 15), (15, 16),         # ring finger
+    (13, 17), (0, 17), (17, 18), (18, 19), (19, 20)# little finger
+]
+
 
 class VideoWindow(QMainWindow):
-    _POLL_INTERVAL_MS = 15 # polling interval for video frame updates in milliseconds
+    _POLL_INTERVAL_MS = 15
 
     def __init__(self, file_path: str):
         super().__init__()
@@ -27,7 +40,9 @@ class VideoWindow(QMainWindow):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
 
-        # audio playback (sound only, no video surface)
+        # Inițializăm detectorul modern MediaPipe Tasks
+        self.detector = self._init_detector()
+
         self.audio_output = QAudioOutput()
         self.media_player = QMediaPlayer()
         self.media_player.setAudioOutput(self.audio_output)
@@ -64,6 +79,22 @@ class VideoWindow(QMainWindow):
         else:
             self.show_current_frame()
 
+    def _init_detector(self):
+        model_path = "hand_landmarker.task"
+        if not os.path.exists(model_path):
+            url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+            urllib.request.urlretrieve(url, model_path)
+
+        base_options = python.BaseOptions(model_asset_path=model_path)
+        options = vision.HandLandmarkerOptions(
+            base_options=base_options,
+            num_hands=2,
+            min_hand_detection_confidence=0.5,
+            min_hand_presence_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
+        return vision.HandLandmarker.create_from_options(options)
+
     def toggle_play(self):
         if not self.capture.isOpened():
             return
@@ -96,19 +127,19 @@ class VideoWindow(QMainWindow):
         target_frame = int(target_ms / 1000.0 * self.fps)
 
         if self.total_frames and target_frame >= self.total_frames:
-            self.toggle_play()  # reached end of video
+            self.toggle_play()
             return
 
         current_frame = int(self.capture.get(cv2.CAP_PROP_POS_FRAMES))
-        if target_frame <= current_frame: # on time or ahead, just read the next frame
+        if target_frame <= current_frame:
             return
 
-        if target_frame - current_frame > 2: # more than 2 frames behind, seek to the target frame
+        if target_frame - current_frame > 2:
             self.capture.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
 
         ok, frame = self.capture.read()
         if not ok:
-            self.toggle_play()  # reached end of video
+            self.toggle_play()
             return
 
         frame = self.process_frame(frame)
@@ -120,7 +151,22 @@ class VideoWindow(QMainWindow):
         self.slider.blockSignals(False)
 
     def process_frame(self, frame):
-        """Placeholder hook for CV/model inference. Customize later."""
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+
+        result = self.detector.detect(mp_image)
+
+        h, w, _ = frame.shape
+        if result.hand_landmarks:
+            for hand_landmarks in result.hand_landmarks:
+                points = [(int(lm.x * w), int(lm.y * h)) for lm in hand_landmarks]
+
+                for start_idx, end_idx in HAND_CONNECTIONS:
+                    cv2.line(frame, points[start_idx], points[end_idx], (212, 212, 45), 2)
+
+                for x, y in points:
+                    cv2.circle(frame, (x, y), 5, (247, 85, 168), -1)
+
         return frame
 
     def show_current_frame(self):
@@ -165,6 +211,8 @@ class VideoWindow(QMainWindow):
     def closeEvent(self, event):
         self.timer.stop()
         self.media_player.stop()
+        if hasattr(self, 'detector') and self.detector:
+            self.detector.close()
         if self.capture is not None:
             self.capture.release()
         event.accept()

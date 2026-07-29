@@ -1,6 +1,9 @@
 import sys
 from PySide6.QtWidgets import QApplication
 
+import os
+os.environ["GLOG_minloglevel"] = "2" 
+
 from app.launcher import LauncherWindow
 
 
