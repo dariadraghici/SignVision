@@ -40,7 +40,6 @@ class VideoWindow(QMainWindow):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
 
-        # Inițializăm detectorul modern MediaPipe Tasks
         self.detector = self._init_detector()
 
         self.audio_output = QAudioOutput()
@@ -160,12 +159,16 @@ class VideoWindow(QMainWindow):
         if result.hand_landmarks:
             for hand_landmarks in result.hand_landmarks:
                 points = [(int(lm.x * w), int(lm.y * h)) for lm in hand_landmarks]
+                sample_x = max(0, min(points[9][0], w - 1))
+                sample_y = max(0, min(points[9][1], h - 1))
+                b, g, r = frame[sample_y, sample_x]
+                skin_color = (int(b), int(g), int(r))
 
                 for start_idx, end_idx in HAND_CONNECTIONS:
-                    cv2.line(frame, points[start_idx], points[end_idx], (212, 212, 45), 2)
+                    cv2.line(frame, points[start_idx], points[end_idx], skin_color, 2)
 
                 for x, y in points:
-                    cv2.circle(frame, (x, y), 5, (247, 85, 168), -1)
+                    cv2.circle(frame, (x, y), 5, skin_color, -1)
 
         return frame
 

@@ -39,7 +39,7 @@ class BrandHeader(QWidget):
         tagline_row.setAlignment(Qt.AlignCenter)
         tagline_row.setSpacing(10)
 
-        dot_left = QLabel("\u2022")
+        dot_left = QLabel("•")
         dot_left.setStyleSheet("color: #a855f7; background: transparent; font-size: 13px;")
         tagline_row.addWidget(dot_left)
 
@@ -52,7 +52,7 @@ class BrandHeader(QWidget):
         tagline.setStyleSheet("background: transparent;")
         tagline_row.addWidget(tagline)
 
-        dot_right = QLabel("\u2022")
+        dot_right = QLabel("•")
         dot_right.setStyleSheet("color: #2dd4bf; background: transparent; font-size: 13px;")
         tagline_row.addWidget(dot_right)
 
