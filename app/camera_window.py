@@ -12,13 +12,47 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QImage, QPixmap
 
-# Legăturile dintre cele 21 de articulații ale mâinii
 HAND_CONNECTIONS = [
     (0, 1), (1, 2), (2, 3), (3, 4),                # thumb
     (0, 5), (5, 6), (6, 7), (7, 8),                # index finger
     (5, 9), (9, 10), (10, 11), (11, 12),           # middle finger
     (9, 13), (13, 14), (14, 15), (15, 16),         # ring finger
     (13, 17), (0, 17), (17, 18), (18, 19), (19, 20)# little finger
+]
+
+FACE_OVAL = [
+    (10, 338), (338, 297), (297, 332), (332, 284), (284, 251), (251, 389), (389, 356), (356, 454),
+    (454, 323), (323, 361), (361, 288), (288, 397), (397, 365), (365, 379), (379, 378), (378, 400),
+    (400, 377), (377, 152), (152, 148), (148, 176), (176, 149), (149, 150), (150, 136), (136, 172),
+    (172, 58), (58, 132), (132, 93), (93, 234), (234, 127), (127, 162), (162, 21), (21, 54),
+    (54, 103), (103, 67), (67, 109), (109, 10)
+]
+
+LIPS = [
+    (61, 146), (146, 91), (91, 181), (181, 84), (84, 17), (17, 314), (314, 405), (405, 321), (321, 375),
+    (375, 291), (291, 61), (61, 185), (185, 40), (40, 39), (39, 37), (37, 0), (0, 267), (267, 269),
+    (269, 270), (270, 409), (409, 291)
+]
+
+LEFT_EYE = [(33, 160), (160, 158), (158, 133), (133, 153), (153, 144), (144, 33)]
+RIGHT_EYE = [(362, 385), (385, 387), (387, 263), (263, 373), (373, 380), (380, 362)]
+
+LEFT_EYEBROW = [(70, 63), (63, 105), (105, 66), (66, 107)]
+RIGHT_EYEBROW = [(336, 296), (296, 334), (334, 293), (293, 300)]
+
+NOSE = [(168, 6), (6, 197), (197, 195), (195, 5)]
+
+FACE_CONNECTIONS = FACE_OVAL + LIPS + LEFT_EYE + RIGHT_EYE + LEFT_EYEBROW + RIGHT_EYEBROW + NOSE
+
+UPPER_BODY_CONNECTIONS = [
+    (11, 12),  # shoulders
+    (11, 13),  # left shoulder -> left elbow
+    (13, 15),  # left elbow -> left wrist
+    (12, 14),  # right shoulder -> right elbow
+    (14, 16),  # right elbow -> right wrist
+    (11, 23),  # left shoulder -> left hip (upper body contour)
+    (12, 24),  # right shoulder -> right hip (upper body contour)
+    (23, 24),  # base of the torso / hips
 ]
 
 
@@ -36,7 +70,7 @@ class CameraWindow(QMainWindow):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
 
-        self.detector = self._init_detector()
+        self.hand_detector, self.face_detector, self.pose_detector = self._init_detectors()
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -61,22 +95,54 @@ class CameraWindow(QMainWindow):
 
         self.start_camera()
 
-    def _init_detector(self):
-        """Descarcă automat modelul hand_landmarker.task dacă nu există și instanțiază detectorul."""
-        model_path = "hand_landmarker.task"
-        if not os.path.exists(model_path):
+    def _init_detectors(self):
+        """Descarcă automat modelele necesare dacă nu există și instanțiază detectoarele."""
+        # Hand Landmarker
+        hand_model_path = "hand_landmarker.task"
+        if not os.path.exists(hand_model_path):
             url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
-            urllib.request.urlretrieve(url, model_path)
+            urllib.request.urlretrieve(url, hand_model_path)
 
-        base_options = python.BaseOptions(model_asset_path=model_path)
-        options = vision.HandLandmarkerOptions(
-            base_options=base_options,
+        hand_options = vision.HandLandmarkerOptions(
+            base_options=python.BaseOptions(model_asset_path=hand_model_path),
             num_hands=2,
             min_hand_detection_confidence=0.5,
             min_hand_presence_confidence=0.5,
             min_tracking_confidence=0.5
         )
-        return vision.HandLandmarker.create_from_options(options)
+        hand_detector = vision.HandLandmarker.create_from_options(hand_options)
+
+        # Face Landmarker
+        face_model_path = "face_landmarker.task"
+        if not os.path.exists(face_model_path):
+            url = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+            urllib.request.urlretrieve(url, face_model_path)
+
+        face_options = vision.FaceLandmarkerOptions(
+            base_options=python.BaseOptions(model_asset_path=face_model_path),
+            num_faces=1,
+            min_face_detection_confidence=0.5,
+            min_face_presence_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
+        face_detector = vision.FaceLandmarker.create_from_options(face_options)
+
+        # Pose Landmarker
+        pose_model_path = "pose_landmarker.task"
+        if not os.path.exists(pose_model_path):
+            url = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
+            urllib.request.urlretrieve(url, pose_model_path)
+
+        pose_options = vision.PoseLandmarkerOptions(
+            base_options=python.BaseOptions(model_asset_path=pose_model_path),
+            num_poses=1,
+            min_pose_detection_confidence=0.5,
+            min_pose_presence_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
+        pose_detector = vision.PoseLandmarker.create_from_options(pose_options)
+
+        return hand_detector, face_detector, pose_detector
 
     def start_camera(self):
         if self.capture is not None:
@@ -114,16 +180,70 @@ class CameraWindow(QMainWindow):
         self.display_frame(frame)
 
     def process_frame(self, frame):
-        """Detecție și desenare pe cadru utilizând noul API MediaPipe Tasks."""
+        """Detecție și desenare cu preluarea culorii pielii pentru mâini, față și corp."""
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
-        result = self.detector.detect(mp_image)
-
         h, w, _ = frame.shape
-        if result.hand_landmarks:
-            for hand_landmarks in result.hand_landmarks:
+
+        # upper body detection
+        pose_result = self.pose_detector.detect(mp_image)
+        if pose_result.pose_landmarks:
+            for pose_landmarks in pose_result.pose_landmarks:
+                pts = [(int(lm.x * w), int(lm.y * h)) for lm in pose_landmarks]
+                
+                # skin color sampling from the shoulder area (point 11)
+                sample_x = max(0, min(pts[11][0], w - 1))
+                sample_y = max(0, min(pts[11][1], h - 1))
+                b, g, r = frame[sample_y, sample_x]
+                skin_color = (int(b), int(g), int(r))
+
+                for start_idx, end_idx in UPPER_BODY_CONNECTIONS:
+                    if start_idx < len(pts) and end_idx < len(pts):
+                        cv2.line(frame, pts[start_idx], pts[end_idx], skin_color, 2)
+
+                if len(pts) > 24:
+                    sh_x = (pts[11][0] + pts[12][0]) // 2
+                    sh_y = (pts[11][1] + pts[12][1]) // 2
+                    hip_x = (pts[23][0] + pts[24][0]) // 2
+                    hip_y = (pts[23][1] + pts[24][1]) // 2
+
+                    cv2.line(frame, (sh_x, sh_y), pts[0], skin_color, 2)
+                    cv2.line(frame, (sh_x, sh_y), (hip_x, hip_y), skin_color, 2)
+
+                    key_body_indices = [11, 12, 13, 14, 23, 24]
+                    for idx in key_body_indices:
+                        if idx < len(pts):
+                            cv2.circle(frame, pts[idx], 5, skin_color, -1)
+
+        # face and head detection
+        face_result = self.face_detector.detect(mp_image)
+        if face_result.face_landmarks:
+            for face_landmarks in face_result.face_landmarks:
+                pts = [(int(lm.x * w), int(lm.y * h)) for lm in face_landmarks]
+                
+                # skin color sampling from the tip of the nose (point 1 in face mesh)
+                sample_x = max(0, min(pts[1][0], w - 1))
+                sample_y = max(0, min(pts[1][1], h - 1))
+                b, g, r = frame[sample_y, sample_x]
+                skin_color = (int(b), int(g), int(r))
+
+                for start_idx, end_idx in FACE_CONNECTIONS:
+                    if start_idx < len(pts) and end_idx < len(pts):
+                        cv2.line(frame, pts[start_idx], pts[end_idx], skin_color, 1)
+
+                key_indices = [1, 33, 263, 61, 291, 10, 152]
+                for idx in key_indices:
+                    if idx < len(pts):
+                        cv2.circle(frame, pts[idx], 3, skin_color, -1)
+
+        # hand detection
+        hand_result = self.hand_detector.detect(mp_image)
+        if hand_result.hand_landmarks:
+            for hand_landmarks in hand_result.hand_landmarks:
                 points = [(int(lm.x * w), int(lm.y * h)) for lm in hand_landmarks]
+                
+                # skin color sampling from the base of the index finger (point 9)
                 sample_x = max(0, min(points[9][0], w - 1))
                 sample_y = max(0, min(points[9][1], h - 1))
                 b, g, r = frame[sample_y, sample_x]
@@ -150,6 +270,10 @@ class CameraWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.stop_camera()
-        if hasattr(self, 'detector') and self.detector:
-            self.detector.close()
+        if hasattr(self, 'hand_detector') and self.hand_detector:
+            self.hand_detector.close()
+        if hasattr(self, 'face_detector') and self.face_detector:
+            self.face_detector.close()
+        if hasattr(self, 'pose_detector') and self.pose_detector:
+            self.pose_detector.close()
         event.accept()
