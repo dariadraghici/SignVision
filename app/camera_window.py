@@ -185,6 +185,32 @@ class CameraWindow(QMainWindow):
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
         h, w, _ = frame.shape
+        chin_point = None
+
+        # face and head detection (processed first to get chin landmark)
+        face_result = self.face_detector.detect(mp_image)
+        if face_result.face_landmarks:
+            for face_landmarks in face_result.face_landmarks:
+                pts = [(int(lm.x * w), int(lm.y * h)) for lm in face_landmarks]
+                
+                # skin color sampling from the tip of the nose (point 1 in face mesh)
+                sample_x = max(0, min(pts[1][0], w - 1))
+                sample_y = max(0, min(pts[1][1], h - 1))
+                b, g, r = frame[sample_y, sample_x]
+                skin_color = (int(b), int(g), int(r))
+
+                # get chin landmark (index 152 in face mesh)
+                if len(pts) > 152:
+                    chin_point = pts[152]
+
+                for start_idx, end_idx in FACE_CONNECTIONS:
+                    if start_idx < len(pts) and end_idx < len(pts):
+                        cv2.line(frame, pts[start_idx], pts[end_idx], skin_color, 1)
+
+                key_indices = [1, 33, 263, 61, 291, 10, 152]
+                for idx in key_indices:
+                    if idx < len(pts):
+                        cv2.circle(frame, pts[idx], 1, skin_color, -1)
 
         # upper body detection
         pose_result = self.pose_detector.detect(mp_image)
@@ -200,7 +226,7 @@ class CameraWindow(QMainWindow):
 
                 for start_idx, end_idx in UPPER_BODY_CONNECTIONS:
                     if start_idx < len(pts) and end_idx < len(pts):
-                        cv2.line(frame, pts[start_idx], pts[end_idx], skin_color, 2)
+                        cv2.line(frame, pts[start_idx], pts[end_idx], skin_color, 1)
 
                 if len(pts) > 24:
                     sh_x = (pts[11][0] + pts[12][0]) // 2
@@ -208,34 +234,15 @@ class CameraWindow(QMainWindow):
                     hip_x = (pts[23][0] + pts[24][0]) // 2
                     hip_y = (pts[23][1] + pts[24][1]) // 2
 
-                    cv2.line(frame, (sh_x, sh_y), pts[0], skin_color, 2)
-                    cv2.line(frame, (sh_x, sh_y), (hip_x, hip_y), skin_color, 2)
+                    # connect neck to chin if available, fallback to pose nose (point 0)
+                    neck_top = chin_point if chin_point is not None else pts[0]
+                    cv2.line(frame, (sh_x, sh_y), neck_top, skin_color, 1)
+                    cv2.line(frame, (sh_x, sh_y), (hip_x, hip_y), skin_color, 1)
 
                     key_body_indices = [11, 12, 13, 14, 23, 24]
                     for idx in key_body_indices:
                         if idx < len(pts):
-                            cv2.circle(frame, pts[idx], 5, skin_color, -1)
-
-        # face and head detection
-        face_result = self.face_detector.detect(mp_image)
-        if face_result.face_landmarks:
-            for face_landmarks in face_result.face_landmarks:
-                pts = [(int(lm.x * w), int(lm.y * h)) for lm in face_landmarks]
-                
-                # skin color sampling from the tip of the nose (point 1 in face mesh)
-                sample_x = max(0, min(pts[1][0], w - 1))
-                sample_y = max(0, min(pts[1][1], h - 1))
-                b, g, r = frame[sample_y, sample_x]
-                skin_color = (int(b), int(g), int(r))
-
-                for start_idx, end_idx in FACE_CONNECTIONS:
-                    if start_idx < len(pts) and end_idx < len(pts):
-                        cv2.line(frame, pts[start_idx], pts[end_idx], skin_color, 1)
-
-                key_indices = [1, 33, 263, 61, 291, 10, 152]
-                for idx in key_indices:
-                    if idx < len(pts):
-                        cv2.circle(frame, pts[idx], 3, skin_color, -1)
+                            cv2.circle(frame, pts[idx], 1, skin_color, -1)
 
         # hand detection
         hand_result = self.hand_detector.detect(mp_image)
@@ -250,10 +257,10 @@ class CameraWindow(QMainWindow):
                 skin_color = (int(b), int(g), int(r))
 
                 for start_idx, end_idx in HAND_CONNECTIONS:
-                    cv2.line(frame, points[start_idx], points[end_idx], skin_color, 2)
+                    cv2.line(frame, points[start_idx], points[end_idx], skin_color, 1)
 
                 for x, y in points:
-                    cv2.circle(frame, (x, y), 5, skin_color, -1)
+                    cv2.circle(frame, (x, y), 1, skin_color, -1)
 
         return frame
 
