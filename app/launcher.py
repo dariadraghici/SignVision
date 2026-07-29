@@ -1,6 +1,6 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QMainWindow, QVBoxLayout, QHBoxLayout, QFileDialog, QMessageBox
+    QMainWindow, QVBoxLayout, QHBoxLayout, QFileDialog, QMessageBox, QStackedWidget, QWidget
 )
 
 from app.background import BackgroundWidget
@@ -12,7 +12,7 @@ from app.video_window import VideoWindow
 
 
 class LauncherWindow(QMainWindow):
-    """Startup window: choose between the laptop camera or a video file."""
+    """Startup window: container cu ecrane interschimbabile."""
 
     SUPPORTED_EXTENSIONS = (".mp4", ".mov", ".avi")
 
@@ -21,22 +21,41 @@ class LauncherWindow(QMainWindow):
         self.setWindowTitle("SignVision")
         self.setMinimumSize(1020, 840)
 
-        self.camera_window = None
-        self.video_window = None
+        # Widget-ul principal de fundal
+        self.background_widget = BackgroundWidget()
+        self.setCentralWidget(self.background_widget)
 
-        central = BackgroundWidget()
-        self.setCentralWidget(central)
+        bg_layout = QVBoxLayout(self.background_widget)
+        bg_layout.setContentsMargins(0, 0, 0, 0)
 
-        root = QVBoxLayout(central)
+        # StackedWidget controlează ce ecran este afișat în cadrul aceleiași ferestre
+        self.stacked_widget = QStackedWidget()
+        bg_layout.addWidget(self.stacked_widget)
+
+        # Ecran 0: Meniul Principal
+        self.menu_widget = QWidget()
+        self.setup_menu_ui()
+        self.stacked_widget.addWidget(self.menu_widget)
+
+        # Ecran 1: Stream-ul Camerei
+        self.camera_page = CameraWindow(on_back_click=self.go_to_menu)
+        self.stacked_widget.addWidget(self.camera_page)
+
+        # Ecran 2: Player-ul Video
+        self.video_page = VideoWindow(on_back_click=self.go_to_menu)
+        self.stacked_widget.addWidget(self.video_page)
+
+    def setup_menu_ui(self):
+        root = QVBoxLayout(self.menu_widget)
         root.setContentsMargins(60, 40, 60, 32)
         root.setSpacing(0)
         root.setAlignment(Qt.AlignHCenter)
 
-        # logo, title, tagline, description
+        # Brand header
         root.addWidget(BrandHeader(), alignment=Qt.AlignHCenter)
         root.addSpacing(36)
 
-        # Cards
+        # Carduri de opțiuni
         cards_row = QHBoxLayout()
         cards_row.setSpacing(28)
 
@@ -70,8 +89,8 @@ class LauncherWindow(QMainWindow):
         root.addWidget(FooterBar())
 
     def open_camera(self):
-        self.camera_window = CameraWindow()
-        self.camera_window.show()
+        self.stacked_widget.setCurrentWidget(self.camera_page)
+        self.camera_page.start_camera()
 
     def open_video_dialog(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -90,5 +109,10 @@ class LauncherWindow(QMainWindow):
             )
             return
 
-        self.video_window = VideoWindow(file_path)
-        self.video_window.show()
+        self.video_page.load_video(file_path)
+        self.stacked_widget.setCurrentWidget(self.video_page)
+
+    def go_to_menu(self):
+        self.camera_page.stop_camera()
+        self.video_page.stop_video()
+        self.stacked_widget.setCurrentWidget(self.menu_widget)

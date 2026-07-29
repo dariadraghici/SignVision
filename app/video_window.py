@@ -6,7 +6,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QSlider
 )
 from PySide6.QtCore import Qt, QTimer, QUrl
@@ -14,11 +14,11 @@ from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 HAND_CONNECTIONS = [
-    (0, 1), (1, 2), (2, 3), (3, 4),                # thumb
-    (0, 5), (5, 6), (6, 7), (7, 8),                # index finger
-    (5, 9), (9, 10), (10, 11), (11, 12),           # middle finger
-    (9, 13), (13, 14), (14, 15), (15, 16),         # ring finger
-    (13, 17), (0, 17), (17, 18), (18, 19), (19, 20)# little finger
+    (0, 1), (1, 2), (2, 3), (3, 4),
+    (0, 5), (5, 6), (6, 7), (7, 8),
+    (5, 9), (9, 10), (10, 11), (11, 12),
+    (9, 13), (13, 14), (14, 15), (15, 16),
+    (13, 17), (0, 17), (17, 18), (18, 19), (19, 20)
 ]
 
 FACE_OVAL = [
@@ -46,31 +46,21 @@ NOSE = [(168, 6), (6, 197), (197, 195), (195, 5)]
 FACE_CONNECTIONS = FACE_OVAL + LIPS + LEFT_EYE + RIGHT_EYE + LEFT_EYEBROW + RIGHT_EYEBROW + NOSE
 
 UPPER_BODY_CONNECTIONS = [
-    (11, 12),  # shoulders
-    (11, 13),  # left shoulder -> left elbow
-    (13, 15),  # left elbow -> left wrist
-    (12, 14),  # right shoulder -> right elbow
-    (14, 16),  # right elbow -> right wrist
-    (11, 23),  # left shoulder -> left hip
-    (12, 24),  # right shoulder -> right hip
-    (23, 24),  # base of the torso
+    (11, 12), (11, 13), (13, 15), (12, 14), (14, 16),
+    (11, 23), (12, 24), (23, 24)
 ]
 
 
-class VideoWindow(QMainWindow):
+class VideoWindow(QWidget):
+    """Componentă integrată pentru redarea și procesarea fișierelor video."""
+
     _POLL_INTERVAL_MS = 15
 
-    def __init__(self, file_path: str):
-        super().__init__()
-        self.setWindowTitle(f"Video Player - {os.path.basename(file_path)}")
-        self.resize(900, 650)
-
+    def __init__(self, file_path: str = "", on_back_click=None, parent=None):
+        super().__init__(parent)
         self.file_path = file_path
-        self.capture = cv2.VideoCapture(file_path)
-        self.fps = self.capture.get(cv2.CAP_PROP_FPS) or 30
-        self.total_frames = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.is_playing = False
-        self.is_seeking = False
+        self.on_back_click = on_back_click
+        self.capture = None
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
@@ -80,20 +70,37 @@ class VideoWindow(QMainWindow):
         self.audio_output = QAudioOutput()
         self.media_player = QMediaPlayer()
         self.media_player.setAudioOutput(self.audio_output)
-        self.media_player.setSource(QUrl.fromLocalFile(file_path))
 
-        central = QWidget()
-        self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 20, 30, 20)
+
+        # Bară superioară cu butonul Back
+        top_bar = QHBoxLayout()
+        self.back_btn = QPushButton("← Back to Menu")
+        self.back_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 15);
+                color: white;
+                border: 1px solid rgba(255, 255, 255, 30);
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background: rgba(255, 255, 255, 30); }
+        """)
+        if self.on_back_click:
+            self.back_btn.clicked.connect(self.on_back_click)
+        top_bar.addWidget(self.back_btn)
+        top_bar.addStretch()
+        layout.addLayout(top_bar)
 
         self.video_label = QLabel()
         self.video_label.setAlignment(Qt.AlignCenter)
-        self.video_label.setStyleSheet("background-color: black;")
-        self.video_label.setMinimumSize(800, 500)
+        self.video_label.setStyleSheet("background-color: black; border-radius: 12px;")
+        self.video_label.setMinimumSize(800, 480)
         layout.addWidget(self.video_label)
 
         self.slider = QSlider(Qt.Horizontal)
-        self.slider.setRange(0, max(self.total_frames - 1, 0))
         self.slider.sliderPressed.connect(self.on_slider_pressed)
         self.slider.sliderReleased.connect(self.on_slider_released)
         layout.addWidget(self.slider)
@@ -108,13 +115,29 @@ class VideoWindow(QMainWindow):
         controls.addWidget(self.stop_btn)
         layout.addLayout(controls)
 
+        if file_path:
+            self.load_video(file_path)
+
+    def load_video(self, file_path: str):
+        self.file_path = file_path
+        if self.capture is not None:
+            self.capture.release()
+
+        self.capture = cv2.VideoCapture(file_path)
+        self.fps = self.capture.get(cv2.CAP_PROP_FPS) or 30
+        self.total_frames = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.is_playing = False
+        self.is_seeking = False
+
+        self.media_player.setSource(QUrl.fromLocalFile(file_path))
+        self.slider.setRange(0, max(self.total_frames - 1, 0))
+
         if not self.capture.isOpened():
             self.video_label.setText("Could not open video file")
         else:
             self.show_current_frame()
 
     def _init_detectors(self):
-        # Hand Landmarker
         hand_model_path = "hand_landmarker.task"
         if not os.path.exists(hand_model_path):
             url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
@@ -129,7 +152,6 @@ class VideoWindow(QMainWindow):
         )
         hand_detector = vision.HandLandmarker.create_from_options(hand_options)
 
-        # Face Landmarker
         face_model_path = "face_landmarker.task"
         if not os.path.exists(face_model_path):
             url = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
@@ -144,7 +166,6 @@ class VideoWindow(QMainWindow):
         )
         face_detector = vision.FaceLandmarker.create_from_options(face_options)
 
-        # Pose Landmarker
         pose_model_path = "pose_landmarker.task"
         if not os.path.exists(pose_model_path):
             url = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
@@ -162,7 +183,7 @@ class VideoWindow(QMainWindow):
         return hand_detector, face_detector, pose_detector
 
     def toggle_play(self):
-        if not self.capture.isOpened():
+        if not self.capture or not self.capture.isOpened():
             return
 
         self.is_playing = not self.is_playing
@@ -181,12 +202,13 @@ class VideoWindow(QMainWindow):
         self.play_btn.setText("Play")
         self.timer.stop()
         self.media_player.stop()
-        self.capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        if self.capture:
+            self.capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
         self.slider.setValue(0)
         self.show_current_frame()
 
     def update_frame(self):
-        if self.is_seeking:
+        if self.is_seeking or not self.capture:
             return
 
         target_ms = self.media_player.position()
@@ -223,19 +245,16 @@ class VideoWindow(QMainWindow):
         h, w, _ = frame.shape
         chin_point = None
 
-        # face and head detection (processed first to get chin landmark)
         face_result = self.face_detector.detect(mp_image)
         if face_result.face_landmarks:
             for face_landmarks in face_result.face_landmarks:
                 pts = [(int(lm.x * w), int(lm.y * h)) for lm in face_landmarks]
                 
-                # skin color sampling from the tip of the nose (point 1 in face mesh)
                 sample_x = max(0, min(pts[1][0], w - 1))
                 sample_y = max(0, min(pts[1][1], h - 1))
                 b, g, r = frame[sample_y, sample_x]
                 skin_color = (int(b), int(g), int(r))
 
-                # get chin landmark (index 152 in face mesh)
                 if len(pts) > 152:
                     chin_point = pts[152]
 
@@ -248,13 +267,11 @@ class VideoWindow(QMainWindow):
                     if idx < len(pts):
                         cv2.circle(frame, pts[idx], 1, skin_color, -1)
 
-        # upper body detection
         pose_result = self.pose_detector.detect(mp_image)
         if pose_result.pose_landmarks:
             for pose_landmarks in pose_result.pose_landmarks:
                 pts = [(int(lm.x * w), int(lm.y * h)) for lm in pose_landmarks]
                 
-                # skin color sampling from the left shoulder (point 11 in pose landmarks)
                 sample_x = max(0, min(pts[11][0], w - 1))
                 sample_y = max(0, min(pts[11][1], h - 1))
                 b, g, r = frame[sample_y, sample_x]
@@ -270,7 +287,6 @@ class VideoWindow(QMainWindow):
                     hip_x = (pts[23][0] + pts[24][0]) // 2
                     hip_y = (pts[23][1] + pts[24][1]) // 2
 
-                    # connect neck to chin if available, fallback to pose nose (point 0)
                     neck_top = chin_point if chin_point is not None else pts[0]
                     cv2.line(frame, (sh_x, sh_y), neck_top, skin_color, 1)
                     cv2.line(frame, (sh_x, sh_y), (hip_x, hip_y), skin_color, 1)
@@ -280,13 +296,11 @@ class VideoWindow(QMainWindow):
                         if idx < len(pts):
                             cv2.circle(frame, pts[idx], 1, skin_color, -1)
 
-        # hand detection
         hand_result = self.hand_detector.detect(mp_image)
         if hand_result.hand_landmarks:
             for hand_landmarks in hand_result.hand_landmarks:
                 points = [(int(lm.x * w), int(lm.y * h)) for lm in hand_landmarks]
                 
-                # skin color sampling from the base of the index finger (point 9)
                 sample_x = max(0, min(points[9][0], w - 1))
                 sample_y = max(0, min(points[9][1], h - 1))
                 b, g, r = frame[sample_y, sample_x]
@@ -301,6 +315,8 @@ class VideoWindow(QMainWindow):
         return frame
 
     def show_current_frame(self):
+        if not self.capture or not self.capture.isOpened():
+            return
         pos = int(self.capture.get(cv2.CAP_PROP_POS_FRAMES))
         ok, frame = self.capture.read()
         if ok:
@@ -326,7 +342,8 @@ class VideoWindow(QMainWindow):
 
     def on_slider_released(self):
         frame_no = self.slider.value()
-        self.capture.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
+        if self.capture:
+            self.capture.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
         self.is_seeking = False
         self._sync_audio_position()
         if self.is_playing:
@@ -335,6 +352,8 @@ class VideoWindow(QMainWindow):
             self.show_current_frame()
 
     def _sync_audio_position(self):
+        if not self.capture:
+            return
         current_frame = int(self.capture.get(cv2.CAP_PROP_POS_FRAMES))
         ms = int(current_frame / self.fps * 1000)
         self.media_player.setPosition(ms)

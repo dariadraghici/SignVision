@@ -6,7 +6,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton
 )
 from PySide6.QtCore import Qt, QTimer
@@ -50,36 +50,53 @@ UPPER_BODY_CONNECTIONS = [
     (13, 15),  # left elbow -> left wrist
     (12, 14),  # right shoulder -> right elbow
     (14, 16),  # right elbow -> right wrist
-    (11, 23),  # left shoulder -> left hip (upper body contour)
-    (12, 24),  # right shoulder -> right hip (upper body contour)
-    (23, 24),  # base of the torso / hips
+    (11, 23),  # left shoulder -> left hip
+    (12, 24),  # right shoulder -> right hip
+    (23, 24),  # base of the torso
 ]
 
 
-class CameraWindow(QMainWindow):
-    """Opens the laptop's default camera and streams frames into the app."""
+class CameraWindow(QWidget):
+    """Componentă integrată pentru streaming-ul și detecția pe cameră web."""
 
-    def __init__(self, camera_index: int = 0):
-        super().__init__()
-        self.setWindowTitle("Laptop Camera")
-        self.resize(900, 650)
-
+    def __init__(self, on_back_click=None, camera_index: int = 0, parent=None):
+        super().__init__(parent)
         self.camera_index = camera_index
         self.capture = None
+        self.on_back_click = on_back_click
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
 
         self.hand_detector, self.face_detector, self.pose_detector = self._init_detectors()
 
-        central = QWidget()
-        self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 20, 30, 20)
+
+        # Bară superioară cu butonul Back
+        top_bar = QHBoxLayout()
+        self.back_btn = QPushButton("← Back to Menu")
+        self.back_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 15);
+                color: white;
+                border: 1px solid rgba(255, 255, 255, 30);
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background: rgba(255, 255, 255, 30); }
+        """)
+        if self.on_back_click:
+            self.back_btn.clicked.connect(self.on_back_click)
+        top_bar.addWidget(self.back_btn)
+        top_bar.addStretch()
+        layout.addLayout(top_bar)
 
         self.video_label = QLabel("Camera is off")
         self.video_label.setAlignment(Qt.AlignCenter)
-        self.video_label.setStyleSheet("background-color: black; color: white;")
-        self.video_label.setMinimumSize(800, 550)
+        self.video_label.setStyleSheet("background-color: black; color: white; border-radius: 12px;")
+        self.video_label.setMinimumSize(800, 500)
         layout.addWidget(self.video_label)
 
         controls = QHBoxLayout()
@@ -93,11 +110,7 @@ class CameraWindow(QMainWindow):
         controls.addWidget(self.stop_btn)
         layout.addLayout(controls)
 
-        self.start_camera()
-
     def _init_detectors(self):
-        """Descarcă automat modelele necesare dacă nu există și instanțiază detectoarele."""
-        # Hand Landmarker
         hand_model_path = "hand_landmarker.task"
         if not os.path.exists(hand_model_path):
             url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
@@ -112,7 +125,6 @@ class CameraWindow(QMainWindow):
         )
         hand_detector = vision.HandLandmarker.create_from_options(hand_options)
 
-        # Face Landmarker
         face_model_path = "face_landmarker.task"
         if not os.path.exists(face_model_path):
             url = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
@@ -127,7 +139,6 @@ class CameraWindow(QMainWindow):
         )
         face_detector = vision.FaceLandmarker.create_from_options(face_options)
 
-        # Pose Landmarker
         pose_model_path = "pose_landmarker.task"
         if not os.path.exists(pose_model_path):
             url = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
@@ -154,7 +165,7 @@ class CameraWindow(QMainWindow):
             self.capture = None
             return
 
-        self.timer.start(30)  # ~33 FPS
+        self.timer.start(30)
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
 
@@ -180,26 +191,22 @@ class CameraWindow(QMainWindow):
         self.display_frame(frame)
 
     def process_frame(self, frame):
-        """Detecție și desenare cu preluarea culorii pielii pentru mâini, față și corp."""
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
 
         h, w, _ = frame.shape
         chin_point = None
 
-        # face and head detection (processed first to get chin landmark)
         face_result = self.face_detector.detect(mp_image)
         if face_result.face_landmarks:
             for face_landmarks in face_result.face_landmarks:
                 pts = [(int(lm.x * w), int(lm.y * h)) for lm in face_landmarks]
                 
-                # skin color sampling from the tip of the nose (point 1 in face mesh)
                 sample_x = max(0, min(pts[1][0], w - 1))
                 sample_y = max(0, min(pts[1][1], h - 1))
                 b, g, r = frame[sample_y, sample_x]
                 skin_color = (int(b), int(g), int(r))
 
-                # get chin landmark (index 152 in face mesh)
                 if len(pts) > 152:
                     chin_point = pts[152]
 
@@ -212,13 +219,11 @@ class CameraWindow(QMainWindow):
                     if idx < len(pts):
                         cv2.circle(frame, pts[idx], 1, skin_color, -1)
 
-        # upper body detection
         pose_result = self.pose_detector.detect(mp_image)
         if pose_result.pose_landmarks:
             for pose_landmarks in pose_result.pose_landmarks:
                 pts = [(int(lm.x * w), int(lm.y * h)) for lm in pose_landmarks]
                 
-                # skin color sampling from the shoulder area (point 11)
                 sample_x = max(0, min(pts[11][0], w - 1))
                 sample_y = max(0, min(pts[11][1], h - 1))
                 b, g, r = frame[sample_y, sample_x]
@@ -234,7 +239,6 @@ class CameraWindow(QMainWindow):
                     hip_x = (pts[23][0] + pts[24][0]) // 2
                     hip_y = (pts[23][1] + pts[24][1]) // 2
 
-                    # connect neck to chin if available, fallback to pose nose (point 0)
                     neck_top = chin_point if chin_point is not None else pts[0]
                     cv2.line(frame, (sh_x, sh_y), neck_top, skin_color, 1)
                     cv2.line(frame, (sh_x, sh_y), (hip_x, hip_y), skin_color, 1)
@@ -244,13 +248,11 @@ class CameraWindow(QMainWindow):
                         if idx < len(pts):
                             cv2.circle(frame, pts[idx], 1, skin_color, -1)
 
-        # hand detection
         hand_result = self.hand_detector.detect(mp_image)
         if hand_result.hand_landmarks:
             for hand_landmarks in hand_result.hand_landmarks:
                 points = [(int(lm.x * w), int(lm.y * h)) for lm in hand_landmarks]
                 
-                # skin color sampling from the base of the index finger (point 9)
                 sample_x = max(0, min(points[9][0], w - 1))
                 sample_y = max(0, min(points[9][1], h - 1))
                 b, g, r = frame[sample_y, sample_x]
