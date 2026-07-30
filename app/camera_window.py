@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QImage, QPixmap
 
+from app.sign_recognizer import SignLanguageRecognizer
+
 HAND_CONNECTIONS = [
     (0, 1), (1, 2), (2, 3), (3, 4),                # thumb
     (0, 5), (5, 6), (6, 7), (7, 8),                # index finger
@@ -57,7 +59,7 @@ UPPER_BODY_CONNECTIONS = [
 
 
 class CameraWindow(QWidget):
-    """Componentă integrată pentru streaming-ul și detecția pe cameră web."""
+    """Integrated camera stream with hand, face, and pose detection, plus sign language recognition."""
 
     def __init__(self, on_back_click=None, camera_index: int = 0, parent=None):
         super().__init__(parent)
@@ -69,11 +71,15 @@ class CameraWindow(QWidget):
         self.timer.timeout.connect(self.update_frame)
 
         self.hand_detector, self.face_detector, self.pose_detector = self._init_detectors()
+        self.sign_recognizer = SignLanguageRecognizer()
+
+        self.spelled_text = ""
+        self.last_detected_letter = ""
+        self.letter_hold_counter = 0
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(30, 20, 30, 20)
 
-        # Bară superioară cu butonul Back
         top_bar = QHBoxLayout()
         self.back_btn = QPushButton("← Back to Menu")
         self.back_btn.setStyleSheet("""
@@ -90,6 +96,22 @@ class CameraWindow(QWidget):
         if self.on_back_click:
             self.back_btn.clicked.connect(self.on_back_click)
         top_bar.addWidget(self.back_btn)
+
+        self.clear_text_btn = QPushButton("Șterge Text")
+        self.clear_text_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(239, 68, 68, 0.2);
+                color: #fca5a5;
+                border: 1px solid rgba(239, 68, 68, 0.4);
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background: rgba(239, 68, 68, 0.4); }
+        """)
+        self.clear_text_btn.clicked.connect(self.clear_spelled_text)
+        top_bar.addWidget(self.clear_text_btn)
+
         top_bar.addStretch()
         layout.addLayout(top_bar)
 
@@ -109,6 +131,10 @@ class CameraWindow(QWidget):
         controls.addWidget(self.start_btn)
         controls.addWidget(self.stop_btn)
         layout.addLayout(controls)
+
+    def clear_spelled_text(self):
+        self.spelled_text = ""
+        self.last_detected_letter = ""
 
     def _init_detectors(self):
         hand_model_path = "hand_landmarker.task"
@@ -197,6 +223,7 @@ class CameraWindow(QWidget):
         h, w, _ = frame.shape
         chin_point = None
 
+        # face
         face_result = self.face_detector.detect(mp_image)
         if face_result.face_landmarks:
             for face_landmarks in face_result.face_landmarks:
@@ -219,6 +246,7 @@ class CameraWindow(QWidget):
                     if idx < len(pts):
                         cv2.circle(frame, pts[idx], 1, skin_color, -1)
 
+        # body pose
         pose_result = self.pose_detector.detect(mp_image)
         if pose_result.pose_landmarks:
             for pose_landmarks in pose_result.pose_landmarks:
@@ -248,7 +276,10 @@ class CameraWindow(QWidget):
                         if idx < len(pts):
                             cv2.circle(frame, pts[idx], 1, skin_color, -1)
 
+        # hand and sign recognition
         hand_result = self.hand_detector.detect(mp_image)
+        detected_sign = None
+
         if hand_result.hand_landmarks:
             for hand_landmarks in hand_result.hand_landmarks:
                 points = [(int(lm.x * w), int(lm.y * h)) for lm in hand_landmarks]
@@ -262,7 +293,46 @@ class CameraWindow(QWidget):
                     cv2.line(frame, points[start_idx], points[end_idx], skin_color, 1)
 
                 for x, y in points:
-                    cv2.circle(frame, (x, y), 1, skin_color, -1)
+                    cv2.circle(frame, (x, y), 2, skin_color, -1)
+
+                # sign language recognition
+                letter, confidence = self.sign_recognizer.predict(hand_landmarks)
+                if letter:
+                    detected_sign = letter
+                    min_x = max(0, min([p[0] for p in points]) - 15)
+                    min_y = max(0, min([p[1] for p in points]) - 40)
+                    max_x = min(w, max([p[0] for p in points]) + 15)
+                    max_y = min(h, max([p[1] for p in points]) + 15)
+
+                    cv2.rectangle(frame, (min_x, min_y), (max_x, max_y), (45, 212, 191), 2)
+                    badge_text = f"Letter: {letter} ({int(confidence*100)}%)"
+                    
+                    (text_w, text_h), _ = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+                    cv2.rectangle(frame, (min_x, min_y - text_h - 10), (min_x + text_w + 12, min_y), (15, 23, 42), -1)
+                    cv2.putText(frame, badge_text, (min_x + 6, min_y - 6),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (45, 212, 191), 2, cv2.LINE_AA)
+
+        # Update spelled text based on detected sign
+        if detected_sign:
+            if detected_sign == self.last_detected_letter:
+                self.letter_hold_counter += 1
+                if self.letter_hold_counter == 3:
+                    self.spelled_text += detected_sign
+            else:
+                self.last_detected_letter = detected_sign
+                self.letter_hold_counter = 0
+        else:
+            self.letter_hold_counter = 0
+
+        # HUD bar for displaying the spelled text
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (20, h - 65), (w - 20, h - 15), (15, 23, 42), -1)
+        frame = cv2.addWeighted(overlay, 0.75, frame, 0.25, 0)
+        cv2.rectangle(frame, (20, h - 65), (w - 20, h - 15), (45, 212, 191), 1)
+
+        hud_text = f"Detected Text: {self.spelled_text if self.spelled_text else '[Waiting for signs...]'}"
+        cv2.putText(frame, hud_text, (35, h - 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2, cv2.LINE_AA)
 
         return frame
 
