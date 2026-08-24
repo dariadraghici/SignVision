@@ -20,7 +20,17 @@ from app.sign_recognizer import SignLanguageRecognizer
 def collect_dataset(output_file="sign_dataset.pkl", samples_per_class=100):
     print("=== Dataset Collection for American Sign Language ===")
     alphabet = [chr(i) for i in range(ord('A'), ord('Z') + 1)]
-    
+
+    existing_data = []
+    existing_labels = []
+    if os.path.exists(output_file):
+        with open(output_file, "rb") as f:
+            existing = pickle.load(f)
+        existing_data = list(existing["data"])
+        existing_labels = list(existing["labels"])
+        print(f"Found existing dataset '{output_file}' with {len(existing_labels)} samples. "
+              f"New samples will be appended to it.")
+
     hand_model_path = "hand_landmarker.task"
     if not os.path.exists(hand_model_path):
         import urllib.request
@@ -35,8 +45,8 @@ def collect_dataset(output_file="sign_dataset.pkl", samples_per_class=100):
     recognizer = SignLanguageRecognizer()
 
     cap = cv2.VideoCapture(0)
-    data = []
-    labels = []
+    data = existing_data
+    labels = existing_labels
 
     for letter in alphabet:
         print(f"Prepare for letter: {letter}. Press 'SPACE' to start recording...")
@@ -54,6 +64,13 @@ def collect_dataset(output_file="sign_dataset.pkl", samples_per_class=100):
             elif key == 27:  # Esc
                 cap.release()
                 cv2.destroyAllWindows()
+                if len(labels) > len(existing_labels):
+                    with open(output_file, "wb") as f:
+                        pickle.dump({"data": np.array(data), "labels": np.array(labels)}, f)
+                    print(f"Stopped early. Progress saved to {output_file} "
+                          f"({len(labels)} total samples).")
+                else:
+                    print("Stopped early. No new samples were collected, nothing changed.")
                 return
 
         collected = 0
@@ -84,7 +101,7 @@ def collect_dataset(output_file="sign_dataset.pkl", samples_per_class=100):
 
     with open(output_file, "wb") as f:
         pickle.dump({"data": np.array(data), "labels": np.array(labels)}, f)
-    print(f"Dataset saved successfully to {output_file}!")
+    print(f"Dataset saved successfully to {output_file}! ({len(labels)} total samples)")
 
 
 def train_model(dataset_file="sign_dataset.pkl", model_file="sign_language_model.pkl"):

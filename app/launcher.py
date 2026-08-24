@@ -107,3 +107,15 @@ class LauncherWindow(QMainWindow):
         self.camera_page.stop_camera()
         self.video_page.stop_video()
         self.stacked_widget.setCurrentWidget(self.menu_widget)
+
+    def closeEvent(self, event):
+        """if a video was loaded/watched, don't let the whole application close until the user
+        has had a chance to decide whether they want the subtitles or not."""
+        if self.video_page.capture is not None:
+            self.video_page.timer.stop()
+            self.video_page.media_player.pause()
+            self.video_page._show_subtitle_dialog(heading="Closing application")
+
+        self.camera_page.stop_camera()
+        self.video_page.stop_video()
+        event.accept()

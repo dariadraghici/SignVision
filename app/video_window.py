@@ -14,6 +14,7 @@ from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 from app.sign_recognizer import SignLanguageRecognizer
+from app.subtitle_dialog import SubtitleReadyDialog
 
 HAND_CONNECTIONS = [
     (0, 1), (1, 2), (2, 3), (3, 4),
@@ -56,6 +57,7 @@ UPPER_BODY_CONNECTIONS = [
 class VideoWindow(QWidget):
 
     _POLL_INTERVAL_MS = 15
+    _SIGN_HOLD_FRAMES = 3  # frames a letter must hold steady before being confirmed
 
     def __init__(self, file_path: str = "", on_back_click=None, parent=None):
         super().__init__(parent)
@@ -66,12 +68,23 @@ class VideoWindow(QWidget):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
 
-        self.hand_detector, self.face_detector, self.pose_detector = self._init_detectors()
+        # Detectors are heavy (hand + face + pose landmarkers). Loading them
+        # here would block app startup even if the user never opens a video,
+        # so they are created lazily on first use (see _ensure_detectors).
+        self.hand_detector = None
+        self.face_detector = None
+        self.pose_detector = None
         self.sign_recognizer = SignLanguageRecognizer()
 
-        self.spelled_text = ""
+        self.spelled_letters = []
         self.last_detected_letter = ""
         self.letter_hold_counter = 0
+
+        # Full record of every subtitle segment seen during this viewing
+        # session, kept even after the on-screen buffer is cleared/reset,
+        # so it can be exported once the video ends or is closed.
+        self.transcript_lines = []
+        self.subtitles_downloaded = False
 
         self.audio_output = QAudioOutput()
         self.media_player = QMediaPlayer()
@@ -93,8 +106,7 @@ class VideoWindow(QWidget):
             }
             QPushButton:hover { background: rgba(255, 255, 255, 24); }
         """)
-        if self.on_back_click:
-            self.back_btn.clicked.connect(self.on_back_click)
+        self.back_btn.clicked.connect(self._handle_back_clicked)
         top_bar.addWidget(self.back_btn)
 
         self.clear_text_btn = QPushButton("Clear Subtitles")
@@ -168,10 +180,14 @@ class VideoWindow(QWidget):
             self.load_video(file_path)
 
     def clear_spelled_text(self):
-        self.spelled_text = ""
+        if self.spelled_letters:
+            self.transcript_lines.append(" ".join(self.spelled_letters))
+        self.spelled_letters = []
         self.last_detected_letter = ""
 
     def load_video(self, file_path: str):
+        self._ensure_detectors()
+
         self.file_path = file_path
         if self.capture is not None:
             self.capture.release()
@@ -182,6 +198,12 @@ class VideoWindow(QWidget):
         self.is_playing = False
         self.is_seeking = False
 
+        self.spelled_letters = []
+        self.last_detected_letter = ""
+        self.letter_hold_counter = 0
+        self.transcript_lines = []
+        self.subtitles_downloaded = False
+
         self.media_player.setSource(QUrl.fromLocalFile(file_path))
         self.slider.setRange(0, max(self.total_frames - 1, 0))
 
@@ -190,7 +212,12 @@ class VideoWindow(QWidget):
         else:
             self.show_current_frame()
 
-    def _init_detectors(self):
+    def _ensure_detectors(self):
+        if self.hand_detector is not None:
+            return
+        self.hand_detector, self.face_detector, self.pose_detector = self._create_detectors()
+
+    def _create_detectors(self):
         hand_model_path = "hand_landmarker.task"
         if not os.path.exists(hand_model_path):
             url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
@@ -260,6 +287,47 @@ class VideoWindow(QWidget):
         self.slider.setValue(0)
         self.show_current_frame()
 
+    def get_transcript_text(self) -> str:
+        """Full record of every subtitle segment seen during this viewing
+        session, including the one currently on screen."""
+        lines = list(self.transcript_lines)
+        if self.spelled_letters:
+            lines.append(" ".join(self.spelled_letters))
+        return "\n".join(lines)
+
+    def _default_txt_filename(self) -> str:
+        if self.file_path:
+            base = os.path.splitext(os.path.basename(self.file_path))[0]
+            return f"{base}_subtitles.txt"
+        return "video_subtitles.txt"
+
+    def _show_subtitle_dialog(self, heading: str = "Playback finished"):
+        if self.subtitles_downloaded:
+            return
+        dialog = SubtitleReadyDialog(
+            transcript_text=self.get_transcript_text(),
+            default_filename=self._default_txt_filename(),
+            heading=heading,
+            parent=self,
+        )
+        dialog.exec()
+        if dialog.saved:
+            self.subtitles_downloaded = True
+
+    def _finish_playback(self):
+        """Called when the video reaches its final frame on its own."""
+        self.is_playing = False
+        self.play_btn.setText("Play")
+        self.timer.stop()
+        self.media_player.pause()
+        self._show_subtitle_dialog(heading="Playback finished")
+
+    def _handle_back_clicked(self):
+        """Called when the user closes the video via 'Back to Menu'."""
+        self._show_subtitle_dialog(heading="Video closed")
+        if self.on_back_click:
+            self.on_back_click()
+
     def update_frame(self):
         if self.is_seeking or not self.capture:
             return
@@ -268,7 +336,7 @@ class VideoWindow(QWidget):
         target_frame = int(target_ms / 1000.0 * self.fps)
 
         if self.total_frames and target_frame >= self.total_frames:
-            self.toggle_play()
+            self._finish_playback()
             return
 
         current_frame = int(self.capture.get(cv2.CAP_PROP_POS_FRAMES))
@@ -280,7 +348,7 @@ class VideoWindow(QWidget):
 
         ok, frame = self.capture.read()
         if not ok:
-            self.toggle_play()
+            self._finish_playback()
             return
 
         frame = self.process_frame(frame)
@@ -386,8 +454,8 @@ class VideoWindow(QWidget):
         if detected_sign:
             if detected_sign == self.last_detected_letter:
                 self.letter_hold_counter += 1
-                if self.letter_hold_counter == 12:
-                    self.spelled_text += detected_sign
+                if self.letter_hold_counter == self._SIGN_HOLD_FRAMES:
+                    self._append_spelled_letter(detected_sign, w)
             else:
                 self.last_detected_letter = detected_sign
                 self.letter_hold_counter = 0
@@ -399,11 +467,23 @@ class VideoWindow(QWidget):
         frame = cv2.addWeighted(overlay, 0.75, frame, 0.25, 0)
         cv2.rectangle(frame, (20, h - 65), (w - 20, h - 15), (74, 120, 160), 1)
 
-        hud_text = f"Video subtitle: {self.spelled_text if self.spelled_text else '[Processing signs...]'}"
+        hud_text = " ".join(self.spelled_letters) if self.spelled_letters else "[Processing signs...]"
         cv2.putText(frame, hud_text, (35, h - 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.75, (232, 228, 220), 2, cv2.LINE_AA)
 
         return frame
+
+    def _append_spelled_letter(self, letter, frame_width):
+        """Add a confirmed letter to the subtitle, spaced from the previous one.
+        If the resulting text would overflow the subtitle box, the box is
+        cleared and this letter starts the next translation instead."""
+        self.spelled_letters.append(letter)
+        text = " ".join(self.spelled_letters)
+        max_text_width = frame_width - 20 - 35 - 15  # box edges minus text start/end padding
+        (text_w, _), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.75, 2)
+        if text_w > max_text_width:
+            self.transcript_lines.append(" ".join(self.spelled_letters[:-1]))
+            self.spelled_letters = [letter]
 
     def show_current_frame(self):
         if not self.capture or not self.capture.isOpened():

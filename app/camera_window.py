@@ -63,10 +63,15 @@ class CameraWindow(QWidget):
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
 
-        self.hand_detector, self.face_detector, self.pose_detector = self._init_detectors()
+        # Detectors are heavy (hand + face + pose landmarkers). Loading them
+        # here would block app startup even if the user never opens the
+        # camera, so they are created lazily on first use.
+        self.hand_detector = None
+        self.face_detector = None
+        self.pose_detector = None
         self.sign_recognizer = SignLanguageRecognizer()
 
-        self.spelled_text = ""
+        self.spelled_letters = []
         self.last_detected_letter = ""
         self.letter_hold_counter = 0
 
@@ -156,10 +161,15 @@ class CameraWindow(QWidget):
         layout.addLayout(controls)
 
     def clear_spelled_text(self):
-        self.spelled_text = ""
+        self.spelled_letters = []
         self.last_detected_letter = ""
 
-    def _init_detectors(self):
+    def _ensure_detectors(self):
+        if self.hand_detector is not None:
+            return
+        self.hand_detector, self.face_detector, self.pose_detector = self._create_detectors()
+
+    def _create_detectors(self):
         hand_model_path = "hand_landmarker.task"
         if not os.path.exists(hand_model_path):
             url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
@@ -207,6 +217,8 @@ class CameraWindow(QWidget):
     def start_camera(self):
         if self.capture is not None:
             return
+
+        self._ensure_detectors()
 
         self.capture = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
         if not self.capture.isOpened():
@@ -335,7 +347,7 @@ class CameraWindow(QWidget):
             if detected_sign == self.last_detected_letter:
                 self.letter_hold_counter += 1
                 if self.letter_hold_counter == 3:
-                    self.spelled_text += detected_sign
+                    self._append_spelled_letter(detected_sign, w)
             else:
                 self.last_detected_letter = detected_sign
                 self.letter_hold_counter = 0
@@ -347,11 +359,22 @@ class CameraWindow(QWidget):
         frame = cv2.addWeighted(overlay, 0.75, frame, 0.25, 0)
         cv2.rectangle(frame, (20, h - 65), (w - 20, h - 15), (110, 150, 115), 1)
 
-        hud_text = f"Detected Text: {self.spelled_text if self.spelled_text else '[Waiting for signs...]'}"
+        hud_text = " ".join(self.spelled_letters) if self.spelled_letters else "[Waiting for signs...]"
         cv2.putText(frame, hud_text, (35, h - 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.75, (232, 228, 220), 2, cv2.LINE_AA)
 
         return frame
+
+    def _append_spelled_letter(self, letter, frame_width):
+        """Add a confirmed letter to the subtitle, spaced from the previous one.
+        If the resulting text would overflow the subtitle box, the box is
+        cleared and this letter starts the next translation instead."""
+        self.spelled_letters.append(letter)
+        text = " ".join(self.spelled_letters)
+        max_text_width = frame_width - 20 - 35 - 15  # box edges minus text start/end padding
+        (text_w, _), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.75, 2)
+        if text_w > max_text_width:
+            self.spelled_letters = [letter]
 
     def display_frame(self, frame):
         rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
