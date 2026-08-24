@@ -1,8 +1,6 @@
 import math
-import random
-
 from PySide6.QtCore import Qt, QPointF
-from PySide6.QtGui import QPainter, QColor, QRadialGradient, QPainterPath, QPen
+from PySide6.QtGui import QPainter, QColor, QPainterPath, QPen
 from PySide6.QtWidgets import QWidget
 
 
@@ -10,87 +8,74 @@ class BackgroundWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        random.seed(7)
-        self._dots = [
-            (random.random(), random.random(), random.uniform(1.0, 2.4))
-            for _ in range(80)
-        ]
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
         rect = self.rect()
 
-        painter.fillRect(rect, QColor("#0c0d1f"))
-
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(255, 255, 255, 16))
-        for fx, fy, r in self._dots:
-            painter.drawEllipse(QPointF(fx * rect.width(), fy * rect.height()), r, r)
-
-        glow = QRadialGradient(rect.width() / 2, 150, 260)
-        glow.setColorAt(0.0, QColor(168, 85, 247, 55))
-        glow.setColorAt(0.55, QColor(99, 102, 241, 22))
-        glow.setColorAt(1.0, QColor(0, 0, 0, 0))
-        painter.setBrush(glow)
-        painter.drawEllipse(QPointF(rect.width() / 2, 150), 300, 300)
-
-        width = min(rect.width(), 460)
-
-        painter.setBrush(Qt.NoBrush)
-        for path, alpha in self._wave_paths(rect.height() - 6, width):
-            pen = QPen(QColor(59, 130, 246, alpha))
-            pen.setWidthF(1.4)
-            painter.setPen(pen)
-            painter.drawPath(path)
-
-        painter.save()
-        painter.translate(rect.width(), 70)
-        painter.scale(-1, -1)
-        for path, alpha in self._wave_paths(6, width):
-            pen = QPen(QColor(168, 85, 247, alpha))
-            pen.setWidthF(1.4)
-            painter.setPen(pen)
-            painter.drawPath(path)
-        painter.restore()
-
-        self._draw_sparkles(painter, rect)
+        painter.fillRect(rect, QColor("#121414"))
 
         painter.end()
 
-    @staticmethod
-    def _wave_paths(base_y, width):
-        paths = []
-        steps = 40
-        for i in range(4):
-            path = QPainterPath()
-            amplitude = 16 + i * 6
-            y0 = base_y - i * 16
-            path.moveTo(0, y0)
-            for step in range(steps + 1):
-                x = width * step / steps
-                y = y0 - amplitude * math.sin(step / steps * math.pi * 1.4)
-                path.lineTo(x, y)
-            paths.append((path, max(6, 46 - i * 9)))
-        return paths
+    def _draw_organic_leaf_left(self, painter, rect):
+        painter.save()
+        pen = QPen(QColor(138, 176, 144, 20))
+        pen.setWidthF(1.0)
+        painter.setPen(pen)
+        painter.setBrush(QColor(138, 176, 144, 8))
 
-    def _draw_sparkles(self, painter, rect):
-        painter.setPen(Qt.NoPen)
-        rng = random.Random(42)
-        for _ in range(9):
-            x = rng.random() * rect.width()
-            y = rng.random() * rect.height() * 0.6
-            size = rng.uniform(3, 6)
-            painter.setBrush(QColor(199, 179, 255, 90))
+        w, h = rect.width(), rect.height()
 
+        leaf1 = QPainterPath()
+        leaf1.moveTo(0, h * 0.05)
+        leaf1.cubicTo(w * 0.15, h * 0.08, w * 0.22, h * 0.2, w * 0.25, h * 0.3)
+        leaf1.cubicTo(w * 0.15, h * 0.35, w * 0.05, h * 0.38, 0, h * 0.4)
+        painter.drawPath(leaf1)
+
+        leaf2 = QPainterPath()
+        leaf2.moveTo(0, h * 0.55)
+        leaf2.cubicTo(w * 0.12, h * 0.6, w * 0.18, h * 0.75, w * 0.2, h * 0.85)
+        leaf2.cubicTo(w * 0.12, h * 0.88, w * 0.04, h * 0.9, 0, h * 0.95)
+        painter.drawPath(leaf2)
+
+        painter.restore()
+
+    def _draw_organic_leaf_right(self, painter, rect):
+        painter.save()
+        pen = QPen(QColor(200, 157, 124, 15))
+        pen.setWidthF(1.0)
+        painter.setPen(pen)
+        painter.setBrush(QColor(200, 157, 124, 6))
+
+        w, h = rect.width(), rect.height()
+
+        leaf1 = QPainterPath()
+        leaf1.moveTo(w, h * 0.15)
+        leaf1.cubicTo(w * 0.88, h * 0.18, w * 0.82, h * 0.3, w * 0.78, h * 0.4)
+        leaf1.cubicTo(w * 0.85, h * 0.45, w * 0.92, h * 0.48, w, h * 0.5)
+        painter.drawPath(leaf1)
+
+        leaf2 = QPainterPath()
+        leaf2.moveTo(w, h * 0.65)
+        leaf2.cubicTo(w * 0.9, h * 0.68, w * 0.85, h * 0.8, w * 0.82, h * 0.9)
+        leaf2.cubicTo(w * 0.88, h * 0.92, w * 0.95, h * 0.95, w, h * 0.98)
+        painter.drawPath(leaf2)
+
+        painter.restore()
+
+    def _draw_subtle_organic_lines(self, painter, rect):
+        painter.save()
+        w, h = rect.width(), rect.height()
+        pen = QPen(QColor(255, 255, 255, 5))
+        pen.setWidthF(1.0)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+
+        for i in range(2):
             path = QPainterPath()
-            path.moveTo(x, y - size)
-            path.lineTo(x + size * 0.3, y - size * 0.3)
-            path.lineTo(x + size, y)
-            path.lineTo(x + size * 0.3, y + size * 0.3)
-            path.lineTo(x, y + size)
-            path.lineTo(x - size * 0.3, y + size * 0.3)
-            path.lineTo(x - size, y)
-            path.lineTo(x - size * 0.3, y - size * 0.3)
-            path.closeSubpath()
+            y_offset = h * (0.3 + i * 0.4)
+            path.moveTo(0, y_offset)
+            path.cubicTo(w * 0.3, y_offset - 60, w * 0.7, y_offset + 60, w, y_offset - 20)
             painter.drawPath(path)
+
+        painter.restore()

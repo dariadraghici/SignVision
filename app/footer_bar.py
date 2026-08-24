@@ -3,8 +3,6 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget, QLabel
 
 from app.icons import make_icon_pixmap
 
-# Every section (including its icon/badge + text) is forced to this width,
-# so all four footer items line up symmetrically regardless of content length.
 SECTION_WIDTH = 210
 
 
@@ -17,8 +15,8 @@ def _icon_label(name: str, color: str, size: int = 18) -> QLabel:
 def _cc_badge() -> QLabel:
     label = QLabel("CC")
     label.setStyleSheet("""
-        color: #c4b5fd;
-        border: 1.5px solid #c4b5fd;
+        color: #c89d7c;
+        border: 1.5px solid #c89d7c;
         border-radius: 5px;
         font-size: 10px;
         font-weight: 700;
@@ -36,7 +34,7 @@ class FooterBar(QFrame):
         self.setStyleSheet("""
             QFrame#footerBar {
                 background-color: rgba(255, 255, 255, 6);
-                border: 1px solid rgba(255, 255, 255, 20);
+                border: 1px solid rgba(255, 255, 255, 15);
                 border-radius: 16px;
             }
             QLabel {
@@ -50,8 +48,8 @@ class FooterBar(QFrame):
 
         sections = [
             self._formats_section(),
-            self._simple_section("lightning", "#2dd4bf", "Real-time\nDetection"),
-            self._simple_section("target", "#a855f7", "High\nAccuracy"),
+            self._simple_section("lightning", "#8ab090", "Real-time\nDetection"),
+            self._simple_section("target", "#c89d7c", "High\nAccuracy"),
             self._cc_section(),
         ]
 
@@ -65,7 +63,7 @@ class FooterBar(QFrame):
     def _divider(self) -> QFrame:
         line = QFrame()
         line.setFrameShape(QFrame.VLine)
-        line.setStyleSheet("background-color: rgba(255, 255, 255, 20); border: none;")
+        line.setStyleSheet("background-color: rgba(255, 255, 255, 15); border: none;")
         line.setFixedWidth(1)
         return line
 
@@ -83,7 +81,7 @@ class FooterBar(QFrame):
         layout.setSpacing(12)
         layout.setAlignment(Qt.AlignVCenter)
 
-        icon = _icon_label("file_play", "#c4b5fd", 22)
+        icon = _icon_label("file_play", "#c89d7c", 22)
         layout.addWidget(icon, alignment=Qt.AlignVCenter)
 
         text_col = QVBoxLayout()
@@ -91,13 +89,13 @@ class FooterBar(QFrame):
         text_col.setAlignment(Qt.AlignVCenter)
 
         label1 = QLabel("Supported video formats:")
-        label1.setStyleSheet("color: #9ca3af; font-size: 12px;")
+        label1.setStyleSheet("color: #9e9a90; font-size: 12px;")
         text_col.addWidget(label1)
 
         label2 = QLabel(
-            '<span style="color:#5eead4;">.mp4</span>&nbsp;&nbsp;'
-            '<span style="color:#c084fc;">.mov</span>&nbsp;&nbsp;'
-            '<span style="color:#93c5fd;">.avi</span>'
+            '<span style="color:#8ab090;">.mp4</span>&nbsp;&nbsp;'
+            '<span style="color:#c89d7c;">.mov</span>&nbsp;&nbsp;'
+            '<span style="color:#b5b0a5;">.avi</span>'
         )
         label2.setStyleSheet("font-size: 13px; font-weight: 600;")
         text_col.addWidget(label2)
@@ -114,7 +112,7 @@ class FooterBar(QFrame):
         layout.addWidget(icon, alignment=Qt.AlignVCenter)
 
         label = QLabel(text)
-        label.setStyleSheet("color: #d1d5db; font-size: 12px;")
+        label.setStyleSheet("color: #d4cfc5; font-size: 12px;")
         label.setAlignment(Qt.AlignVCenter)
         layout.addWidget(label, alignment=Qt.AlignVCenter)
         return self._make_section(layout)
@@ -127,7 +125,7 @@ class FooterBar(QFrame):
         layout.addWidget(_cc_badge(), alignment=Qt.AlignVCenter)
 
         label = QLabel("Instant\nSubtitles")
-        label.setStyleSheet("color: #d1d5db; font-size: 12px;")
+        label.setStyleSheet("color: #d4cfc5; font-size: 12px;")
         label.setAlignment(Qt.AlignVCenter)
         layout.addWidget(label, alignment=Qt.AlignVCenter)
         return self._make_section(layout)

@@ -28,19 +28,19 @@ class SourceCard(QFrame):
         accent_rgb = hex_to_rgb(accent_start)
         self.setStyleSheet(f"""
             QFrame#sourceCard {{
-                background-color: rgba(255, 255, 255, 8);
-                border: 1.5px solid rgba({accent_rgb}, 90);
+                background-color: rgba(255, 255, 255, 5);
+                border: 1.5px solid rgba({accent_rgb}, 70);
                 border-radius: 18px;
             }}
             QLabel#cardTitle {{
-                color: #f5f5fa;
+                color: #e8e4dc;
                 font-size: 20px;
                 font-weight: 700;
                 background: transparent;
                 border: none;
             }}
             QLabel#cardDescription {{
-                color: #9ca3af;
+                color: #b8b3a8;
                 font-size: 13px;
                 background: transparent;
                 border: none;
@@ -48,9 +48,9 @@ class SourceCard(QFrame):
         """)
 
         shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(28)
-        shadow.setOffset(0, 8)
-        shadow.setColor(QColor(0, 0, 0, 140))
+        shadow.setBlurRadius(24)
+        shadow.setOffset(0, 6)
+        shadow.setColor(QColor(0, 0, 0, 120))
         self.setGraphicsEffect(shadow)
 
         layout = QVBoxLayout(self)
@@ -62,11 +62,11 @@ class SourceCard(QFrame):
         icon_circle.setFixedSize(64, 64)
         icon_circle.setAlignment(Qt.AlignCenter)
         icon_circle.setStyleSheet(f"""
-            background-color: rgba({accent_rgb}, 35);
+            background-color: rgba({accent_rgb}, 30);
+            border: 1px solid rgba({accent_rgb}, 50);
             border-radius: 32px;
-            border: none;
         """)
-        icon_pixmap = make_icon_pixmap(icon_name, accent_start, 30)
+        icon_pixmap = make_icon_pixmap(icon_name, "#e8e4dc", 30)
         icon_label = QLabel(icon_circle)
         icon_label.setPixmap(icon_pixmap)
         icon_label.setFixedSize(30, 30)
@@ -95,10 +95,10 @@ class SourceCard(QFrame):
                     x1:0, y1:0, x2:1, y2:0,
                     stop:0 {accent_start}, stop:1 {accent_end}
                 );
-                color: white;
+                color: #e8e4dc;
                 font-size: 14px;
                 font-weight: 600;
-                border: none;
+                border: 1px solid rgba(255, 255, 255, 20);
                 border-radius: 23px;
                 padding: 0 22px;
             }}
@@ -109,7 +109,7 @@ class SourceCard(QFrame):
                 );
             }}
         """)
-        button.setIcon(_as_icon(make_icon_pixmap(button_icon, "#ffffff", 16)))
+        button.setIcon(_as_icon(make_icon_pixmap(button_icon, "#e8e4dc", 16)))
         button.setText(f"  {button_text}")
         button.clicked.connect(on_click)
         layout.addWidget(button)

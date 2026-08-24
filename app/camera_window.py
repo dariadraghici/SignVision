@@ -15,11 +15,11 @@ from PySide6.QtGui import QImage, QPixmap
 from app.sign_recognizer import SignLanguageRecognizer
 
 HAND_CONNECTIONS = [
-    (0, 1), (1, 2), (2, 3), (3, 4),                # thumb
-    (0, 5), (5, 6), (6, 7), (7, 8),                # index finger
-    (5, 9), (9, 10), (10, 11), (11, 12),           # middle finger
-    (9, 13), (13, 14), (14, 15), (15, 16),         # ring finger
-    (13, 17), (0, 17), (17, 18), (18, 19), (19, 20)# little finger
+    (0, 1), (1, 2), (2, 3), (3, 4),
+    (0, 5), (5, 6), (6, 7), (7, 8),
+    (5, 9), (9, 10), (10, 11), (11, 12),
+    (9, 13), (13, 14), (14, 15), (15, 16),
+    (13, 17), (0, 17), (17, 18), (18, 19), (19, 20)
 ]
 
 FACE_OVAL = [
@@ -47,19 +47,12 @@ NOSE = [(168, 6), (6, 197), (197, 195), (195, 5)]
 FACE_CONNECTIONS = FACE_OVAL + LIPS + LEFT_EYE + RIGHT_EYE + LEFT_EYEBROW + RIGHT_EYEBROW + NOSE
 
 UPPER_BODY_CONNECTIONS = [
-    (11, 12),  # shoulders
-    (11, 13),  # left shoulder -> left elbow
-    (13, 15),  # left elbow -> left wrist
-    (12, 14),  # right shoulder -> right elbow
-    (14, 16),  # right elbow -> right wrist
-    (11, 23),  # left shoulder -> left hip
-    (12, 24),  # right shoulder -> right hip
-    (23, 24),  # base of the torso
+    (11, 12), (11, 13), (13, 15), (12, 14), (14, 16),
+    (11, 23), (12, 24), (23, 24)
 ]
 
 
 class CameraWindow(QWidget):
-    """Integrated camera stream with hand, face, and pose detection, plus sign language recognition."""
 
     def __init__(self, on_back_click=None, camera_index: int = 0, parent=None):
         super().__init__(parent)
@@ -84,30 +77,30 @@ class CameraWindow(QWidget):
         self.back_btn = QPushButton("← Back to Menu")
         self.back_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(255, 255, 255, 15);
-                color: white;
-                border: 1px solid rgba(255, 255, 255, 30);
+                background: rgba(255, 255, 255, 12);
+                color: #e8e4dc;
+                border: 1px solid rgba(255, 255, 255, 20);
                 border-radius: 8px;
                 padding: 8px 16px;
                 font-weight: 600;
             }
-            QPushButton:hover { background: rgba(255, 255, 255, 30); }
+            QPushButton:hover { background: rgba(255, 255, 255, 24); }
         """)
         if self.on_back_click:
             self.back_btn.clicked.connect(self.on_back_click)
         top_bar.addWidget(self.back_btn)
 
-        self.clear_text_btn = QPushButton("Șterge Text")
+        self.clear_text_btn = QPushButton("Clear Text")
         self.clear_text_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(239, 68, 68, 0.2);
-                color: #fca5a5;
-                border: 1px solid rgba(239, 68, 68, 0.4);
+                background: rgba(180, 80, 80, 0.2);
+                color: #e8b0b0;
+                border: 1px solid rgba(180, 80, 80, 0.35);
                 border-radius: 8px;
                 padding: 8px 16px;
                 font-weight: 600;
             }
-            QPushButton:hover { background: rgba(239, 68, 68, 0.4); }
+            QPushButton:hover { background: rgba(180, 80, 80, 0.35); }
         """)
         self.clear_text_btn.clicked.connect(self.clear_spelled_text)
         top_bar.addWidget(self.clear_text_btn)
@@ -117,14 +110,44 @@ class CameraWindow(QWidget):
 
         self.video_label = QLabel("Camera is off")
         self.video_label.setAlignment(Qt.AlignCenter)
-        self.video_label.setStyleSheet("background-color: black; color: white; border-radius: 12px;")
+        self.video_label.setStyleSheet("""
+            background-color: #121414;
+            color: #e8e4dc;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 12);
+        """)
         self.video_label.setMinimumSize(800, 500)
         layout.addWidget(self.video_label)
 
         controls = QHBoxLayout()
         self.start_btn = QPushButton("Start Camera")
+        self.start_btn.setStyleSheet("""
+            QPushButton {
+                background: #48594a;
+                color: #e8e4dc;
+                border: 1px solid rgba(138, 176, 144, 0.3);
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background: #556957; }
+            QPushButton:disabled { background: rgba(255, 255, 255, 8); color: #666; border: 1px solid rgba(255, 255, 255, 10); }
+        """)
         self.start_btn.clicked.connect(self.start_camera)
+
         self.stop_btn = QPushButton("Stop Camera")
+        self.stop_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 12);
+                color: #e8e4dc;
+                border: 1px solid rgba(255, 255, 255, 20);
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background: rgba(255, 255, 255, 24); }
+            QPushButton:disabled { background: rgba(255, 255, 255, 8); color: #666; border: 1px solid rgba(255, 255, 255, 10); }
+        """)
         self.stop_btn.clicked.connect(self.stop_camera)
         self.stop_btn.setEnabled(False)
 
@@ -223,7 +246,6 @@ class CameraWindow(QWidget):
         h, w, _ = frame.shape
         chin_point = None
 
-        # face
         face_result = self.face_detector.detect(mp_image)
         if face_result.face_landmarks:
             for face_landmarks in face_result.face_landmarks:
@@ -246,7 +268,6 @@ class CameraWindow(QWidget):
                     if idx < len(pts):
                         cv2.circle(frame, pts[idx], 1, skin_color, -1)
 
-        # body pose
         pose_result = self.pose_detector.detect(mp_image)
         if pose_result.pose_landmarks:
             for pose_landmarks in pose_result.pose_landmarks:
@@ -276,7 +297,6 @@ class CameraWindow(QWidget):
                         if idx < len(pts):
                             cv2.circle(frame, pts[idx], 1, skin_color, -1)
 
-        # hand and sign recognition
         hand_result = self.hand_detector.detect(mp_image)
         detected_sign = None
 
@@ -295,7 +315,6 @@ class CameraWindow(QWidget):
                 for x, y in points:
                     cv2.circle(frame, (x, y), 2, skin_color, -1)
 
-                # sign language recognition
                 letter, confidence = self.sign_recognizer.predict(hand_landmarks)
                 if letter:
                     detected_sign = letter
@@ -304,15 +323,14 @@ class CameraWindow(QWidget):
                     max_x = min(w, max([p[0] for p in points]) + 15)
                     max_y = min(h, max([p[1] for p in points]) + 15)
 
-                    cv2.rectangle(frame, (min_x, min_y), (max_x, max_y), (45, 212, 191), 2)
+                    cv2.rectangle(frame, (min_x, min_y), (max_x, max_y), (110, 150, 115), 2)
                     badge_text = f"Letter: {letter} ({int(confidence*100)}%)"
                     
                     (text_w, text_h), _ = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-                    cv2.rectangle(frame, (min_x, min_y - text_h - 10), (min_x + text_w + 12, min_y), (15, 23, 42), -1)
+                    cv2.rectangle(frame, (min_x, min_y - text_h - 10), (min_x + text_w + 12, min_y), (20, 24, 22), -1)
                     cv2.putText(frame, badge_text, (min_x + 6, min_y - 6),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (45, 212, 191), 2, cv2.LINE_AA)
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (180, 220, 185), 2, cv2.LINE_AA)
 
-        # Update spelled text based on detected sign
         if detected_sign:
             if detected_sign == self.last_detected_letter:
                 self.letter_hold_counter += 1
@@ -324,15 +342,14 @@ class CameraWindow(QWidget):
         else:
             self.letter_hold_counter = 0
 
-        # HUD bar for displaying the spelled text
         overlay = frame.copy()
-        cv2.rectangle(overlay, (20, h - 65), (w - 20, h - 15), (15, 23, 42), -1)
+        cv2.rectangle(overlay, (20, h - 65), (w - 20, h - 15), (20, 24, 22), -1)
         frame = cv2.addWeighted(overlay, 0.75, frame, 0.25, 0)
-        cv2.rectangle(frame, (20, h - 65), (w - 20, h - 15), (45, 212, 191), 1)
+        cv2.rectangle(frame, (20, h - 65), (w - 20, h - 15), (110, 150, 115), 1)
 
         hud_text = f"Detected Text: {self.spelled_text if self.spelled_text else '[Waiting for signs...]'}"
         cv2.putText(frame, hud_text, (35, h - 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2, cv2.LINE_AA)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.75, (232, 228, 220), 2, cv2.LINE_AA)
 
         return frame
 

@@ -1,4 +1,4 @@
-from PySide6.QtCore import QByteArray, Qt, QPointF
+from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtGui import QPixmap, QPainter
 from PySide6.QtSvg import QSvgRenderer
 
@@ -67,8 +67,8 @@ _TEMPLATES = {
 _LOGO_SVG = """<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#2dd4bf"/>
-      <stop offset="100%" stop-color="#a855f7"/>
+      <stop offset="0%" stop-color="#8ab090"/>
+      <stop offset="100%" stop-color="#c89d7c"/>
     </linearGradient>
   </defs>
   <path d="M20 32V22a4 4 0 0 1 4 -4h10" stroke="url(#grad1)" stroke-width="3" stroke-linecap="round" fill="none"/>

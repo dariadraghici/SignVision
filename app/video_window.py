@@ -54,7 +54,6 @@ UPPER_BODY_CONNECTIONS = [
 
 
 class VideoWindow(QWidget):
-    """Video window for displaying and processing video feed."""
 
     _POLL_INTERVAL_MS = 15
 
@@ -85,30 +84,30 @@ class VideoWindow(QWidget):
         self.back_btn = QPushButton("← Back to Menu")
         self.back_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(255, 255, 255, 15);
-                color: white;
-                border: 1px solid rgba(255, 255, 255, 30);
+                background: rgba(255, 255, 255, 12);
+                color: #e8e4dc;
+                border: 1px solid rgba(255, 255, 255, 20);
                 border-radius: 8px;
                 padding: 8px 16px;
                 font-weight: 600;
             }
-            QPushButton:hover { background: rgba(255, 255, 255, 30); }
+            QPushButton:hover { background: rgba(255, 255, 255, 24); }
         """)
         if self.on_back_click:
             self.back_btn.clicked.connect(self.on_back_click)
         top_bar.addWidget(self.back_btn)
 
-        self.clear_text_btn = QPushButton("Șterge Subtitrare")
+        self.clear_text_btn = QPushButton("Clear Subtitles")
         self.clear_text_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(239, 68, 68, 0.2);
-                color: #fca5a5;
-                border: 1px solid rgba(239, 68, 68, 0.4);
+                background: rgba(180, 80, 80, 0.2);
+                color: #e8b0b0;
+                border: 1px solid rgba(180, 80, 80, 0.35);
                 border-radius: 8px;
                 padding: 8px 16px;
                 font-weight: 600;
             }
-            QPushButton:hover { background: rgba(239, 68, 68, 0.4); }
+            QPushButton:hover { background: rgba(180, 80, 80, 0.35); }
         """)
         self.clear_text_btn.clicked.connect(self.clear_spelled_text)
         top_bar.addWidget(self.clear_text_btn)
@@ -118,7 +117,12 @@ class VideoWindow(QWidget):
 
         self.video_label = QLabel()
         self.video_label.setAlignment(Qt.AlignCenter)
-        self.video_label.setStyleSheet("background-color: black; border-radius: 12px;")
+        self.video_label.setStyleSheet("""
+            background-color: #121414;
+            color: #e8e4dc;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 12);
+        """)
         self.video_label.setMinimumSize(800, 480)
         layout.addWidget(self.video_label)
 
@@ -129,8 +133,31 @@ class VideoWindow(QWidget):
 
         controls = QHBoxLayout()
         self.play_btn = QPushButton("Play")
+        self.play_btn.setStyleSheet("""
+            QPushButton {
+                background: #7a5a3e;
+                color: #e8e4dc;
+                border: 1px solid rgba(200, 157, 124, 0.3);
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background: #8c684a; }
+        """)
         self.play_btn.clicked.connect(self.toggle_play)
+
         self.stop_btn = QPushButton("Stop")
+        self.stop_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 12);
+                color: #e8e4dc;
+                border: 1px solid rgba(255, 255, 255, 20);
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background: rgba(255, 255, 255, 24); }
+        """)
         self.stop_btn.clicked.connect(self.stop_video)
 
         controls.addWidget(self.play_btn)
@@ -348,13 +375,13 @@ class VideoWindow(QWidget):
                     max_x = min(w, max([p[0] for p in points]) + 15)
                     max_y = min(h, max([p[1] for p in points]) + 15)
 
-                    cv2.rectangle(frame, (min_x, min_y), (max_x, max_y), (168, 85, 247), 2)
+                    cv2.rectangle(frame, (min_x, min_y), (max_x, max_y), (74, 120, 160), 2)
                     badge_text = f"Sign: {letter} ({int(confidence*100)}%)"
                     
                     (text_w, text_h), _ = cv2.getTextSize(badge_text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-                    cv2.rectangle(frame, (min_x, min_y - text_h - 10), (min_x + text_w + 12, min_y), (15, 23, 42), -1)
+                    cv2.rectangle(frame, (min_x, min_y - text_h - 10), (min_x + text_w + 12, min_y), (20, 24, 22), -1)
                     cv2.putText(frame, badge_text, (min_x + 6, min_y - 6),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (168, 85, 247), 2, cv2.LINE_AA)
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (180, 200, 220), 2, cv2.LINE_AA)
 
         if detected_sign:
             if detected_sign == self.last_detected_letter:
@@ -368,13 +395,13 @@ class VideoWindow(QWidget):
             self.letter_hold_counter = 0
 
         overlay = frame.copy()
-        cv2.rectangle(overlay, (20, h - 65), (w - 20, h - 15), (15, 23, 42), -1)
+        cv2.rectangle(overlay, (20, h - 65), (w - 20, h - 15), (20, 24, 22), -1)
         frame = cv2.addWeighted(overlay, 0.75, frame, 0.25, 0)
-        cv2.rectangle(frame, (20, h - 65), (w - 20, h - 15), (168, 85, 247), 1)
+        cv2.rectangle(frame, (20, h - 65), (w - 20, h - 15), (74, 120, 160), 1)
 
         hud_text = f"Video subtitle: {self.spelled_text if self.spelled_text else '[Processing signs...]'}"
         cv2.putText(frame, hud_text, (35, h - 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2, cv2.LINE_AA)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.75, (232, 228, 220), 2, cv2.LINE_AA)
 
         return frame
 
