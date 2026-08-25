@@ -1,20 +1,21 @@
-import math
 import os
 import pickle
 import numpy as np
 
+try:
+    from app.motion_recognizer import MotionGestureRecognizer
+except ImportError:
+    from motion_recognizer import MotionGestureRecognizer
+
 
 class SignLanguageRecognizer:
-    """
-    Recognizer for American Sign Language (ASL) letters A-Z using MediaPipe hand landmarks.
-    It combines a geometric rule-based classifier with an optional machine learning model (Random Forest).
-    """
+    """ Recognizer for American Sign Language (ASL) letters A-Z using MediaPipe hand landmarks. """
 
-    def __init__(self, model_path="sign_language_model.pkl"):
+    def __init__(self, model_path="sign_language_model.pkl", motion_model_path="motion_model.pkl"):
         self.ml_model = None
         self.history = []
         self.history_size = 2  # Number of frames for temporal averaging (prevents flicker)
-        
+
         # Loading custom ML model if it exists
         if os.path.exists(model_path):
             try:
@@ -24,16 +25,18 @@ class SignLanguageRecognizer:
             except Exception as e:
                 print(f"[SignRecognizer] Failed to load ML model: {e}")
 
+        self.motion_recognizer = MotionGestureRecognizer(motion_model_path)
+
     def extract_features(self, landmarks):
         """
         Extract normalized coordinates, angles, and distances from the 21 MediaPipe landmark points.
         """
         pts = np.array([[lm.x, lm.y, lm.z] for lm in landmarks])
-        
+
         # Reference point: Wrist (index 0)
         wrist = pts[0]
         pts_norm = pts - wrist
-        
+
         # Scale normalization based on palm size (0 -> 9 MCP of middle finger)
         palm_size = np.linalg.norm(pts_norm[9])
         if palm_size > 0:
@@ -135,12 +138,10 @@ class SignLanguageRecognizer:
             if dist_thumb_index < 0.3:
                 return "F", 0.94
 
-        # I, J, Y: pinky extended, others flexed
+        # I, Y: pinky extended, others flexed (J is the same handshape as I plus a hook motion - see self.motion_recognizer)
         if pinky_ext and not index_ext and not middle_ext and not ring_ext:
             if thumb_ext:
                 return "Y", 0.95
-            elif pointing_down:
-                return "J", 0.87
             return "I", 0.93
 
         # V, U, R, K, P
@@ -169,10 +170,18 @@ class SignLanguageRecognizer:
 
     def predict(self, landmarks):
         """
-        Main prediction function that combines geometric rules and ML model (if available).
+        Main prediction function. The motion recognizer runs on every frame
+        so it can accumulate its trajectory buffer; when it confidently
+        recognizes a J or Z stroke it takes priority over the static
+        classifier for a short hold window, then hands control back.
         """
         if not landmarks or len(landmarks) < 21:
             return "", 0.0
+
+        motion_letter, motion_conf = self.motion_recognizer.update(landmarks)
+        if motion_letter:
+            self.history = [motion_letter]
+            return motion_letter, motion_conf
 
         if self.ml_model is not None:
             try:
