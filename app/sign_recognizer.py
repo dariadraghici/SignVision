@@ -11,7 +11,7 @@ except ImportError:
 class SignLanguageRecognizer:
     """ Recognizer for American Sign Language (ASL) letters A-Z using MediaPipe hand landmarks. """
 
-    def __init__(self, model_path="sign_language_model.pkl", motion_model_path="motion_model.pkl"):
+    def __init__(self, model_path="pkl/sign_language_model.pkl", motion_model_path="pkl/motion_model.pkl"):
         self.ml_model = None
         self.history = []
         self.history_size = 2  # Number of frames for temporal averaging (prevents flicker)

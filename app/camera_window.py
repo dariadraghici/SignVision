@@ -170,7 +170,9 @@ class CameraWindow(QWidget):
         self.hand_detector, self.face_detector, self.pose_detector = self._create_detectors()
 
     def _create_detectors(self):
-        hand_model_path = "hand_landmarker.task"
+        os.makedirs("task", exist_ok=True)
+
+        hand_model_path = os.path.join("task", "hand_landmarker.task")
         if not os.path.exists(hand_model_path):
             url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
             urllib.request.urlretrieve(url, hand_model_path)
@@ -184,7 +186,7 @@ class CameraWindow(QWidget):
         )
         hand_detector = vision.HandLandmarker.create_from_options(hand_options)
 
-        face_model_path = "face_landmarker.task"
+        face_model_path = os.path.join("task", "face_landmarker.task")
         if not os.path.exists(face_model_path):
             url = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
             urllib.request.urlretrieve(url, face_model_path)
@@ -198,7 +200,7 @@ class CameraWindow(QWidget):
         )
         face_detector = vision.FaceLandmarker.create_from_options(face_options)
 
-        pose_model_path = "pose_landmarker.task"
+        pose_model_path = os.path.join("task", "pose_landmarker.task")
         if not os.path.exists(pose_model_path):
             url = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
             urllib.request.urlretrieve(url, pose_model_path)

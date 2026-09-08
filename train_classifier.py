@@ -43,7 +43,8 @@ STATIC_LETTERS = [chr(i) for i in range(ord('A'), ord('Z') + 1) if chr(i) not in
 
 
 def _ensure_hand_model():
-    hand_model_path = "hand_landmarker.task"
+    os.makedirs("task", exist_ok=True)
+    hand_model_path = os.path.join("task", "hand_landmarker.task")
     if not os.path.exists(hand_model_path):
         import urllib.request
         url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
@@ -51,9 +52,11 @@ def _ensure_hand_model():
     return hand_model_path
 
 
-def collect_dataset(output_file="sign_dataset.pkl", samples_per_class=100):
+def collect_dataset(output_file="pkl/sign_dataset.pkl", samples_per_class=100):
     """Collects static, single-frame samples for every letter EXCEPT J and Z."""
     print("=== Dataset Collection for American Sign Language (static letters) ===")
+
+    os.makedirs("pkl", exist_ok=True)
 
     existing_data = []
     existing_labels = []
@@ -148,7 +151,7 @@ def collect_dataset(output_file="sign_dataset.pkl", samples_per_class=100):
     print(f"Dataset saved successfully to {output_file}! ({len(labels)} total samples)")
 
 
-def collect_motion_dataset(output_file="motion_dataset.pkl", samples_per_class=40):
+def collect_motion_dataset(output_file="pkl/motion_dataset.pkl", samples_per_class=40):
     """
     Collects motion samples for J and Z. Each sample is a short sequence of
     MOTION_BUFFER_SIZE consecutive frames recorded right after SPACE is
@@ -157,6 +160,8 @@ def collect_motion_dataset(output_file="motion_dataset.pkl", samples_per_class=4
     print("=== Dataset Collection for American Sign Language (motion letters: J, Z) ===")
     print(f"Each sample records {MOTION_BUFFER_SIZE} frames - perform the full "
           f"gesture right after pressing SPACE and keep going until it stops recording.")
+
+    os.makedirs("pkl", exist_ok=True)
 
     existing_data = []
     existing_labels = []
@@ -245,10 +250,12 @@ def collect_motion_dataset(output_file="motion_dataset.pkl", samples_per_class=4
     print(f"Motion dataset saved successfully to {output_file}! ({len(labels)} total samples)")
 
 
-def train_model(dataset_file="sign_dataset.pkl", model_file="sign_language_model.pkl"):
+def train_model(dataset_file="pkl/sign_dataset.pkl", model_file="pkl/sign_language_model.pkl"):
     if not os.path.exists(dataset_file):
         print(f"File {dataset_file} does not exist! Please collect the data first.")
         return
+
+    os.makedirs("pkl", exist_ok=True)
 
     with open(dataset_file, "rb") as f:
         dataset = pickle.load(f)
@@ -277,10 +284,12 @@ def train_model(dataset_file="sign_dataset.pkl", model_file="sign_language_model
     print(f"Model saved successfully to {model_file}!")
 
 
-def train_motion_model(dataset_file="motion_dataset.pkl", model_file="motion_model.pkl"):
+def train_motion_model(dataset_file="pkl/motion_dataset.pkl", model_file="pkl/motion_model.pkl"):
     if not os.path.exists(dataset_file):
         print(f"File {dataset_file} does not exist! Please collect motion data first (option 3).")
         return
+
+    os.makedirs("pkl", exist_ok=True)
 
     with open(dataset_file, "rb") as f:
         dataset = pickle.load(f)

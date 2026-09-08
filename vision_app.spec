@@ -6,7 +6,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('app_icon.ico', '.')],
     hiddenimports=['cv2', 'mediapipe'],
     hookspath=[],
     hooksconfig={},
@@ -31,6 +31,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='app_icon.ico',
 )
 
 coll = COLLECT(

@@ -130,7 +130,7 @@ def extract_trajectory_features(points: np.ndarray) -> np.ndarray:
 class MotionGestureRecognizer:
     """Tracks the index fingertip across frames and recognizes J / Z strokes."""
 
-    def __init__(self, model_path="motion_model.pkl"):
+    def __init__(self, model_path="pkl/motion_model.pkl"):
         self.model = None
         if os.path.exists(model_path):
             try:
